@@ -1,0 +1,159 @@
+---
+title: "Negative binomial GLM"
+author: "Olga Lyashevska"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: united
+---
+
+```{r setup}
+# load packages 
+packages <- c("ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex")
+lapply(packages, library, character.only = TRUE)
+```
+
+```{r}
+# load data
+getwd()
+df <- read.csv("../../data/data.csv")
+
+# describe data
+colnames(df)
+# [1] "site"        "net"         "year"        "lat"         "long"        "distshore"   "trawl"       "area"        "chlorophyll" "tempavg"     "tempstdev"  
+# [12] "sal"         "bod"         "nh3"         "po4"         "depth"       "nflounder"  
+dim(df)
+# (2763, 17)
+
+df[c("net", "site")]<-lapply(df[c("net", "site")], factor)
+
+summary(df)
+
+
+```
+
+
+<!-- ggplot(df, aes(nflounder)) + geom_histogram(binwidth = 1, fill = "blue", color = "black") + labs(title = "Histogram of nflounder", x = "nflounder") -->
+
+<!-- # remove sqrt variables -->
+<!-- df <- df[,- grep("sqrt", names(df))] -->
+
+<!-- # Fit a Negative Binomial Generalized Linear Model -->
+<!-- m.glm <- glm.nb(nflounder ~. , data = df) -->
+
+<!-- # choose a model by AIC in a Stepwise Algorithm -->
+<!-- m.glm.stp<-stepAIC(m.glm, direction="both") -->
+
+<!-- summary(m.glm.stp) -->
+<!-- # summary suggests the bestmodel formula -->
+
+<!-- Step:  AIC=13146.46 -->
+<!-- nflounder ~ site + year + lat + trawl + chlorophyll + tempavg +  -->
+<!--   tempstdev + distshore_cube + trawl_cube + chlorophyll_cube -->
+
+<!-- # likelihood ratio test -->
+<!-- # p-value tells if the likelihoods can be considered different -->
+<!-- # non-significant p-value, use model with smaller df --> m.glm.stp -->
+<!-- anova(m.glm, m.glm.stp) -->
+
+<!-- Likelihood ratio tests of Negative Binomial Models -->
+
+<!-- Response: nflounder -->
+<!-- Model -->
+<!-- 1 site + year + lat + trawl + chlorophyll + tempavg + tempstdev + distshore_cube + trawl_cube + chlorophyll_cube -->
+<!-- 2 site + net + year + lat + long + distshore + trawl + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + distshore_cube + trawl_cube + area_cube + chlorophyll_cube -->
+<!--       theta Resid. df    2 x log-lik.   Test    df LR stat.   Pr(Chi) -->
+<!-- 1 0.3620203      2680       -12978.46                                 -->
+<!-- 2 0.3629897      2673       -12975.46 1 vs 2     7 2.999229 0.8850735 -->
+
+<!-- library(lmtest) -->
+<!-- lrtest(m.glm, m.glm.stp) -->
+
+<!-- Likelihood ratio test -->
+
+<!-- Model 1: nflounder ~ site + net + year + lat + long + distshore + trawl +  -->
+<!--   area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 +  -->
+<!--   po4 + depth + distshore_cube + trawl_cube + area_cube + chlorophyll_cube -->
+<!-- Model 2: nflounder ~ site + year + lat + trawl + chlorophyll + tempavg +  -->
+<!--   tempstdev + distshore_cube + trawl_cube + chlorophyll_cube -->
+<!--    Df  LogLik Df  Chisq Pr(>Chisq) -->
+<!-- 1  92 -6487.7                      -->
+<!-- 2  85 -6489.2 -7 2.9992     0.8851 -->
+
+<!-- # WHY NO SIGNIFICANCE CODES IN EITHER OF THESE? SIMILAR P VALUES,  -->
+<!-- # DIFFERENT DEGREESE OF FREEDOM, WHY??  -->
+
+
+<!-- # model diagnostics -->
+<!-- # there are a few outliers, check -->
+<!-- # residuals vs fitted --> linearity assumptions -->
+<!-- # qqplot -> normality -->
+<!-- # scale-location --> homogeneity variance -->
+<!-- # residuals vs leverage --> influential points  -->
+
+<!-- png("m.glm.stp.33.png", width = 900, height = 900, res = 120) -->
+<!-- par(mfrow=c(2,2)) -->
+<!-- plot(m.glm.stp) -->
+<!-- dev.off() -->
+
+<!-- # INSERT THIS PLOT AND INTERPRET IN WORD FILE -->
+
+<!-- # you could also further explore and plot residuals against individual variable  -->
+<!-- # to see which one is violating -->
+
+<!-- # WHICH ARE RESIDUAL VARIABLES IN OUR DATA? -->
+
+<!-- m.glm.res = residuals(m.glm) -->
+
+<!-- We now plot the residual against the observed values of the variables -->
+
+<!-- plot(m.glm, m.glm.res) -->
+
+<!-- plot(m.glm, m.glm.res)+ -->
+<!--   ylab("residuals") + xlab("variable") -->
+<!-- <return> -->
+
+
+<!-- # Generalised Additive Modelling to address nonlinearity -->
+<!-- m.gam <- gam(nflounder ~ net + year + long + trawl + area + s(chlorophyll) +  -->
+<!--               tempavg + tempstdev + s(sal) + nh3 + depth +  -->
+<!--               distshore_cube + area_cube + s(bod),  -->
+<!--               data = df, family = "nb", method = "REML", select=TRUE) -->
+
+<!-- summary(m.gam) -->
+
+<!-- png("m.gam.png", width = 900, height = 900, res = 120) -->
+<!-- par(mfrow = c(2,2)) -->
+<!-- gam.check(m.gam) -->
+<!-- dev.off() -->
+
+<!-- png("m.gam.smooth.png", width = 900, height = 900, res = 120) -->
+<!-- par(mfrow=c(2,2)) -->
+<!-- plot(m.gam) -->
+<!-- dev.off() -->
+
+<!-- # drop non-significant variables -->
+<!-- m.gam.sig <- gam(nflounder ~ net + year + long + area + s(chlorophyll) +  -->
+<!--                tempstdev + s(sal) + depth +  -->
+<!--                distshore_cube + area_cube + s(bod),  -->
+<!--              data = df, family = "nb", method = "REML", select=TRUE) -->
+
+<!-- summary(m.gam.sig) -->
+
+<!-- png("m.gam.sig.png", width = 900, height = 900, res = 120) -->
+<!-- par(mfrow = c(2,2)) -->
+<!-- gam.check(m.gam.sig) -->
+<!-- dev.off() -->
+
+<!-- png("m.gam.sig.smooth.png", width = 900, height = 900, res = 120) -->
+<!-- par(mfrow=c(2,2)) -->
+<!-- plot(m.gam.sig) -->
+<!-- dev.off() -->
+
+
+<!-- # consider adding random effect of site -->
+<!-- # Generalised Additive Mixed Modelling -->
+<!-- m.gamm <- gamm(nflounder ∼ nflounder ~ net + year + long + area + s(chlorophyll) +  -->
+<!--                  tempstdev + s(sal) + depth + distshore_cube + area_cube + s(bod),  -->
+<!--                random = list(site = ∼ 1), data = df) -->
