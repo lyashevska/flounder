@@ -1,6 +1,6 @@
 # Data
 
-/data
+data.csv
 
 # History files
 .Rhistory
