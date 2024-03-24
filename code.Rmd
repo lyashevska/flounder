@@ -1,46 +1,89 @@
 ---
-title: "Negative binomial GLM"
+title: "Statistical analysis of the effect of environmental variables on abundance of flounder"
 author: "Olga Lyashevska"
 date: "`r Sys.Date()`"
 output:
-  html_document:
+  pdf_document:
     toc: true
-    theme: united
 ---
 
 ```{r setup}
 # load packages 
 packages <- c("ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex")
 lapply(packages, library, character.only = TRUE)
+knitr::opts_chunk$set(fig.path = "figure/", dev = "png")
 ```
+
+# Data preparation and exploration
 
 ```{r}
 # load data
-getwd()
-df <- read.csv("../../data/data.csv")
-
+df <- read.csv("data.csv")
 # describe data
 colnames(df)
-# [1] "site"        "net"         "year"        "lat"         "long"        "distshore"   "trawl"       "area"        "chlorophyll" "tempavg"     "tempstdev"  
-# [12] "sal"         "bod"         "nh3"         "po4"         "depth"       "nflounder"  
 dim(df)
-# (2763, 17)
-
 df[c("net", "site")]<-lapply(df[c("net", "site")], factor)
-
 summary(df)
+```
 
+## Distribution of nflounder
 
+```{r}
+ggplot(df, aes(nflounder)) + 
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Histogram of nflounder", x = "nflounder")
+```
+See how many values fall in each category:
+
+```{r}
+# Define the bin width
+bin_width <- 10
+
+# Define the breaks for the bins
+breaks <- seq(min(df$nflounder), max(df$nflounder), by = bin_width)
+
+# Divide the data into bins
+bins <- cut(df$nflounder, breaks = breaks, include.lowest = TRUE, right = FALSE)
+
+# Count the number of values in each bin
+bin_counts <- table(bins)
+
+# Print the bin counts
+print(bin_counts)
+```
+Lets truncate values above 100 for modelling convenience. 
+
+```{r}
+original_nrow <- nrow(df)
+df <- subset(df, nflounder <= 100)
+removed_nrow <- original_nrow-nrow(df)
+conditional_var <- var(df$nflounder, na.rm=TRUE)
+conditional_mean <- mean(df$nflounder, na.rm=TRUE)
+```
+We removed `r removed_nrow` from `r original_nrow`. Let's visualise distribution of nflounder again.
+```{r}
+ggplot(df, aes(nflounder)) + 
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Histogram of nflounder", x = "nflounder")
+```
+As we can see data is still highly overdispersed, the conditional variance (`r conditional_var`) exceeds the conditional mean (`r conditional_mean`). In situations like this negative binomial is an appropriate distribution to use. 
+
+## Correlation analysis
+```{r}
+df_numeric <- df[sapply(df, is.numeric)]
+cor_matrix <- cor(df_numeric, use = "complete.obs")
+print(cor_matrix)
 ```
 
 
-<!-- ggplot(df, aes(nflounder)) + geom_histogram(binwidth = 1, fill = "blue", color = "black") + labs(title = "Histogram of nflounder", x = "nflounder") -->
 
-<!-- # remove sqrt variables -->
-<!-- df <- df[,- grep("sqrt", names(df))] -->
 
-<!-- # Fit a Negative Binomial Generalized Linear Model -->
-<!-- m.glm <- glm.nb(nflounder ~. , data = df) -->
+# Data modelling 
+## Negative binomial GLM
+Lets fit a negative binomial generalized linear model. 
+```{r}
+m.glm <- glm.nb(nflounder ~. , data = df)
+```
 
 <!-- # choose a model by AIC in a Stepwise Algorithm -->
 <!-- m.glm.stp<-stepAIC(m.glm, direction="both") -->
