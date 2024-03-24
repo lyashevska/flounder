@@ -9,7 +9,7 @@ output:
 
 ```{r setup}
 # load packages 
-packages <- c("ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex")
+packages <- c("ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex", "lme4")
 lapply(packages, library, character.only = TRUE)
 knitr::opts_chunk$set(fig.path = "figure/", dev = "png")
 ```
@@ -60,6 +60,7 @@ removed_nrow <- original_nrow-nrow(df)
 conditional_var <- var(df$nflounder, na.rm=TRUE)
 conditional_mean <- mean(df$nflounder, na.rm=TRUE)
 ```
+
 We removed `r removed_nrow` from `r original_nrow`. Let's visualise distribution of nflounder again.
 ```{r}
 ggplot(df, aes(nflounder)) + 
@@ -68,6 +69,13 @@ ggplot(df, aes(nflounder)) +
 ```
 As we can see data is still highly overdispersed, the conditional variance (`r conditional_var`) exceeds the conditional mean (`r conditional_mean`). In situations like this negative binomial is an appropriate distribution to use. 
 
+```{r}
+ggplot(df, aes(x = factor(year), y = nflounder)) +
+  geom_boxplot() +
+  # scale_y_log10() +
+  labs(x = "year", y = "nflounder", title = "nflounder vs year")
+```
+
 ## Correlation analysis
 ```{r}
 df_numeric <- df[sapply(df, is.numeric)]
@@ -75,90 +83,59 @@ cor_matrix <- cor(df_numeric, use = "complete.obs")
 print(cor_matrix)
 ```
 
+## Zero-inflation
 
+```{r}
+# Calculate the proportion of values that are 0
+zero_proportion <- mean(df$nflounder == 0)
+```
+The proportion of zeros in nflounder is `r zero_proportion`. 
 
+## Scale variables
+We shall scale some of the variables to avoid numerical overflow.
+
+```{r}
+var_to_scale <- c("distshore", "trawl", "area","chlorophyll")
+df[, var_to_scale] <- scale(df[, var_to_scale])
+```
 
 # Data modelling 
 ## Negative binomial GLM
-Lets fit a negative binomial generalized linear model. 
+Lets fit a negative binomial generalized linear model for full dataset, excluding site and net for the moment.
+
 ```{r}
-m.glm <- glm.nb(nflounder ~. , data = df)
+m.glm <- glm.nb(nflounder ~. - site - net  , data = df)
+summary(m.glm)
+```
+Choose a model by AIC in a Stepwise Algorithm
+
+```{r results='hide'}
+m.glm.stp<-stepAIC(m.glm, direction="both")
 ```
 
-<!-- # choose a model by AIC in a Stepwise Algorithm -->
-<!-- m.glm.stp<-stepAIC(m.glm, direction="both") -->
+```{r}
+summary(m.glm.stp)
+```
 
-<!-- summary(m.glm.stp) -->
-<!-- # summary suggests the bestmodel formula -->
+Likelihood ratio test, p-value tells if the likelihoods can be considered different. Non-significant p-value, use model with smaller df.
 
-<!-- Step:  AIC=13146.46 -->
-<!-- nflounder ~ site + year + lat + trawl + chlorophyll + tempavg +  -->
-<!--   tempstdev + distshore_cube + trawl_cube + chlorophyll_cube -->
+```{r}
+anova(m.glm, m.glm.stp)
+```
+## Negative Binomial GLMM
+Add random effect of site and net to the best model.
 
-<!-- # likelihood ratio test -->
-<!-- # p-value tells if the likelihoods can be considered different -->
-<!-- # non-significant p-value, use model with smaller df --> m.glm.stp -->
-<!-- anova(m.glm, m.glm.stp) -->
+<!-- ```{r} -->
+<!-- # library(lme4) -->
+<!-- # m.glmm <- glmer.nb(nflounder ~ year + lat + long + distshore + trawl + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + (1|site)+(1|net), data = df) -->
+<!-- # summary() -->
+<!-- ``` -->
 
-<!-- Likelihood ratio tests of Negative Binomial Models -->
+## Zero-inflated negative binomial GLM
+<!-- https://fukamilab.github.io/BIO202/04-C-zero-data.html#zero-inflated_negative_binomial_glm -->
+## Zero-inflated negative binomial GLMM
 
-<!-- Response: nflounder -->
-<!-- Model -->
-<!-- 1 site + year + lat + trawl + chlorophyll + tempavg + tempstdev + distshore_cube + trawl_cube + chlorophyll_cube -->
-<!-- 2 site + net + year + lat + long + distshore + trawl + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + distshore_cube + trawl_cube + area_cube + chlorophyll_cube -->
-<!--       theta Resid. df    2 x log-lik.   Test    df LR stat.   Pr(Chi) -->
-<!-- 1 0.3620203      2680       -12978.46                                 -->
-<!-- 2 0.3629897      2673       -12975.46 1 vs 2     7 2.999229 0.8850735 -->
-
-<!-- library(lmtest) -->
-<!-- lrtest(m.glm, m.glm.stp) -->
-
-<!-- Likelihood ratio test -->
-
-<!-- Model 1: nflounder ~ site + net + year + lat + long + distshore + trawl +  -->
-<!--   area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 +  -->
-<!--   po4 + depth + distshore_cube + trawl_cube + area_cube + chlorophyll_cube -->
-<!-- Model 2: nflounder ~ site + year + lat + trawl + chlorophyll + tempavg +  -->
-<!--   tempstdev + distshore_cube + trawl_cube + chlorophyll_cube -->
-<!--    Df  LogLik Df  Chisq Pr(>Chisq) -->
-<!-- 1  92 -6487.7                      -->
-<!-- 2  85 -6489.2 -7 2.9992     0.8851 -->
-
-<!-- # WHY NO SIGNIFICANCE CODES IN EITHER OF THESE? SIMILAR P VALUES,  -->
-<!-- # DIFFERENT DEGREESE OF FREEDOM, WHY??  -->
-
-
-<!-- # model diagnostics -->
-<!-- # there are a few outliers, check -->
-<!-- # residuals vs fitted --> linearity assumptions -->
-<!-- # qqplot -> normality -->
-<!-- # scale-location --> homogeneity variance -->
-<!-- # residuals vs leverage --> influential points  -->
-
-<!-- png("m.glm.stp.33.png", width = 900, height = 900, res = 120) -->
-<!-- par(mfrow=c(2,2)) -->
-<!-- plot(m.glm.stp) -->
-<!-- dev.off() -->
-
-<!-- # INSERT THIS PLOT AND INTERPRET IN WORD FILE -->
-
-<!-- # you could also further explore and plot residuals against individual variable  -->
-<!-- # to see which one is violating -->
-
-<!-- # WHICH ARE RESIDUAL VARIABLES IN OUR DATA? -->
-
-<!-- m.glm.res = residuals(m.glm) -->
-
-<!-- We now plot the residual against the observed values of the variables -->
-
-<!-- plot(m.glm, m.glm.res) -->
-
-<!-- plot(m.glm, m.glm.res)+ -->
-<!--   ylab("residuals") + xlab("variable") -->
-<!-- <return> -->
-
-
-<!-- # Generalised Additive Modelling to address nonlinearity -->
+## Negative binomial GAM
 <!-- m.gam <- gam(nflounder ~ net + year + long + trawl + area + s(chlorophyll) +  -->
 <!--               tempavg + tempstdev + s(sal) + nh3 + depth +  -->
 <!--               distshore_cube + area_cube + s(bod),  -->
@@ -194,9 +171,35 @@ m.glm <- glm.nb(nflounder ~. , data = df)
 <!-- plot(m.gam.sig) -->
 <!-- dev.off() -->
 
-
-<!-- # consider adding random effect of site -->
+## Negative binomial GAMM
+Consider adding random effect of site  and net
 <!-- # Generalised Additive Mixed Modelling -->
 <!-- m.gamm <- gamm(nflounder ∼ nflounder ~ net + year + long + area + s(chlorophyll) +  -->
 <!--                  tempstdev + s(sal) + depth + distshore_cube + area_cube + s(bod),  -->
 <!--                random = list(site = ∼ 1), data = df) -->
+
+<!-- https://r.qcbs.ca/workshop08/book-en/introduction-to-generalized-additive-mixed-models-gamms.html -->
+<!-- m.gamm <- gamm(nflounder ~ net + year + long + area + s(chlorophyll) + -->
+<!--                  tempstdev + s(sal) + depth + distshore_cube + area_cube + s(bod), -->
+<!--                random = list(site = ~ 1), data = df, family = "nb", method = "REML", select = TRUE) -->
+
+
+
+
+<!-- # model diagnostics -->
+<!-- # there are a few outliers, check -->
+<!-- # residuals vs fitted --> linearity assumptions -->
+<!-- # qqplot -> normality -->
+<!-- # scale-location --> homogeneity variance -->
+<!-- # residuals vs leverage --> influential points  -->
+<!-- png("m.glm.stp.33.png", width = 900, height = 900, res = 120) -->
+<!-- par(mfrow=c(2,2)) -->
+<!-- plot(m.glm.stp) -->
+<!-- dev.off() -->
+
+<!-- m.glm.res = residuals(m.glm) -->
+<!-- We now plot the residual against the observed values of the variables -->
+<!-- plot(m.glm, m.glm.res) -->
+<!-- plot(m.glm, m.glm.res)+ -->
+<!--   ylab("residuals") + xlab("variable") -->
+<!-- <return> -->

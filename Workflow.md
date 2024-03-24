@@ -17,7 +17,7 @@ Where `<package-name>` is the name of the package you want to install and `<cont
 For example to install packages "ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex" I would run the following commands:
 
 ```bash
-docker exec 1b4c R -e `install.packages(c("ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex")`
+docker exec 1b4c R -e `install.packages(c("ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex", "lme4")`
 ```
 RStudio can be accessed at `http://localhost:8787`
 User name is `rstudio` and password is `pass`
