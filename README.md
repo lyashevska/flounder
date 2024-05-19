@@ -5,7 +5,7 @@ Statistical analysis of the effect of environmental variables on abundance of fi
 Please refer to the [Workflow](Workflow.md) for instructions on how to run the code in a Docker container.
 
 ### Requirements
-- Docker
+- [Docker](https://docs.docker.com/get-docker/)
   
 ###
 
