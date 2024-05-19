@@ -9,9 +9,10 @@ output:
 
 ```{r setup}
 # load packages 
-packages <- c("ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex", "lme4")
+packages <- c("ggplot2", "MASS", "rmarkdown", "tinytex", "reshape2", "glmmTMB", "DHARMa")
 lapply(packages, library, character.only = TRUE)
 knitr::opts_chunk$set(fig.path = "figure/", dev = "png")
+set.seed(123)
 ```
 
 # Data preparation and exploration
@@ -62,6 +63,7 @@ conditional_mean <- mean(df$nflounder, na.rm=TRUE)
 ```
 
 We removed `r removed_nrow` from `r original_nrow`. Let's visualise distribution of nflounder again.
+
 ```{r}
 ggplot(df, aes(nflounder)) + 
   geom_histogram(binwidth = 10, fill = "blue", color = "black") +
@@ -81,6 +83,23 @@ ggplot(df, aes(x = factor(year), y = nflounder)) +
 df_numeric <- df[sapply(df, is.numeric)]
 cor_matrix <- cor(df_numeric, use = "complete.obs")
 print(cor_matrix)
+
+# Melt the correlation matrix into a long format
+cor_matrix_melted <- melt(cor_matrix)
+
+# Plot the heatmap using ggplot2
+ggplot(data = cor_matrix_melted, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, 
+                                   size = 9, hjust = 1), 
+        axis.title.x = element_blank(), # Remove x-axis title
+        axis.title.y = element_blank(),) +
+  
+  coord_fixed()
 ```
 
 ## Zero-inflation
@@ -95,111 +114,202 @@ The proportion of zeros in nflounder is `r zero_proportion`.
 We shall scale some of the variables to avoid numerical overflow.
 
 ```{r}
-var_to_scale <- c("distshore", "trawl", "area","chlorophyll")
+var_to_scale <- c("distshore", "area","chlorophyll")
 df[, var_to_scale] <- scale(df[, var_to_scale])
 ```
 
+Consider discarding some of the variables, e.g. `trawl`, in which the proportion of 0's (should be NA's?) `r mean(df$trawl == 0)`.
+
+```{r}
+df <- subset(df, select = -trawl)
+```
 # Data modelling 
 ## Negative binomial GLM
-Lets fit a negative binomial generalized linear model for full dataset, excluding site and net for the moment.
+We fit a negative binomial generalized linear model with log link to the full dataset, excluding site, trawl and net for the moment. This model is useful for count data that exhibit overdispersion (the var exceeds the mean). 
+Let \( Y_i \) denote the count response variable for the \( i \)-th observation. The negative binomial distribution for \( Y_i \) is parameterised by the mean \( \lambda_i \) and the dispersion parameter \( \theta \):
+
+\[
+Y_i \sim \text{NB}(\lambda_i, \theta)
+\]
+
+where the probability mass function is given by:
+
+\[
+P(Y_i = k) = \binom{k + \theta - 1}{k} \left( \frac{\theta}{\theta + \lambda_i} \right)^\theta \left( \frac{\lambda_i}{\theta + \lambda_i} \right)^k, \quad k = 0, 1, 2, \ldots
+\]
+
+### Log Link Function
+
+The relationship between the mean \( \lambda_i \) and the explanatory variables \( \mathbf{X}_i \) is modeled using a log link function:
+
+\[
+\log(\lambda_i) = \mathbf{X}_i \boldsymbol{\beta}
+\]
+
+where:
+\begin{itemize}
+    \item \( \lambda_i \) is the expected count for the \( i \)-th observation.
+    \item \( \mathbf{X}_i \) is a vector of explanatory variables for the \( i \)-th observation.
+    \item \( \boldsymbol{\beta} \) is a vector of coefficients to be estimated.
+\end{itemize}
+
+### Linear Predictor
+
+The linear predictor is given: 
+\[
+\eta_i = \mathbf{X}_i \boldsymbol{\beta}
+\]
+where \( \eta_i = \log(\lambda_i) \). Therefore, the model can be rewritten as:
+
+\[
+\lambda_i = \exp(\mathbf{X}_i \boldsymbol{\beta})
+\]
 
 ```{r}
-m.glm <- glm.nb(nflounder ~. - site - net  , data = df)
-summary(m.glm)
-```
-Choose a model by AIC in a Stepwise Algorithm
-
-```{r results='hide'}
-m.glm.stp<-stepAIC(m.glm, direction="both")
-```
-
-```{r}
-summary(m.glm.stp)
+m.glmm.fixed <- glmmTMB(
+  nflounder ~ year + lat + long + distshore + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth, 
+  data = df, 
+  family = nbinom2()
+)
+summary(m.glmm.fixed)
 ```
 
-Likelihood ratio test, p-value tells if the likelihoods can be considered different. Non-significant p-value, use model with smaller df.
-
-```{r}
-anova(m.glm, m.glm.stp)
-```
 ## Negative Binomial GLMM
-Add random effect of site and net to the best model.
+Lets add random effect of site and net to the best model. This is an additional term that accounts for unobserved heterogeneity in the data. Random effects are used when data are collected in clusters or groups, and there may be variability between these groups that is not captured by the observed explanatory variables.
 
-<!-- ```{r} -->
-<!-- # library(lme4) -->
-<!-- # m.glmm <- glmer.nb(nflounder ~ year + lat + long + distshore + trawl + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + (1|site)+(1|net), data = df) -->
-<!-- # summary() -->
-<!-- ``` -->
+### Random Effects
 
-## Zero-inflated negative binomial GLM
-<!-- https://fukamilab.github.io/BIO202/04-C-zero-data.html#zero-inflated_negative_binomial_glm -->
-## Zero-inflated negative binomial GLMM
+The random effects \( u_j \) are assumed to follow a normal distribution with mean zero and variance \( \sigma^2_u \):
 
-## Negative binomial GAM
-<!-- m.gam <- gam(nflounder ~ net + year + long + trawl + area + s(chlorophyll) +  -->
-<!--               tempavg + tempstdev + s(sal) + nh3 + depth +  -->
-<!--               distshore_cube + area_cube + s(bod),  -->
-<!--               data = df, family = "nb", method = "REML", select=TRUE) -->
+\[
+u_j \sim \mathcal{N}(0, \sigma^2_u)
+\]
 
-<!-- summary(m.gam) -->
+### Linear Predictor
 
-<!-- png("m.gam.png", width = 900, height = 900, res = 120) -->
-<!-- par(mfrow = c(2,2)) -->
-<!-- gam.check(m.gam) -->
-<!-- dev.off() -->
+The linear predictor is given by:
 
-<!-- png("m.gam.smooth.png", width = 900, height = 900, res = 120) -->
-<!-- par(mfrow=c(2,2)) -->
-<!-- plot(m.gam) -->
-<!-- dev.off() -->
+\[
+\eta_{ij} = \mathbf{X}_{ij} \boldsymbol{\beta} + u_j
+\]
 
-<!-- # drop non-significant variables -->
-<!-- m.gam.sig <- gam(nflounder ~ net + year + long + area + s(chlorophyll) +  -->
-<!--                tempstdev + s(sal) + depth +  -->
-<!--                distshore_cube + area_cube + s(bod),  -->
-<!--              data = df, family = "nb", method = "REML", select=TRUE) -->
+where \( \eta_{ij} = \log(\lambda_{ij}) \). Therefore, the model can be rewritten as:
 
-<!-- summary(m.gam.sig) -->
+\[
+\lambda_{ij} = \exp(\mathbf{X}_{ij} \boldsymbol{\beta} + u_j)
+\]
 
-<!-- png("m.gam.sig.png", width = 900, height = 900, res = 120) -->
-<!-- par(mfrow = c(2,2)) -->
-<!-- gam.check(m.gam.sig) -->
-<!-- dev.off() -->
+```{r}
+# a model of crossed random effects (site and net)
+m.glmm.random1 <- glmmTMB(
+  nflounder ~ year + lat + long + distshore + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + (1 | site) + (1 | net), 
+  data = df, 
+  family = nbinom2()
+)
+summary(m.glmm.random1)
 
-<!-- png("m.gam.sig.smooth.png", width = 900, height = 900, res = 120) -->
-<!-- par(mfrow=c(2,2)) -->
-<!-- plot(m.gam.sig) -->
-<!-- dev.off() -->
+# alternatively we consider a model of nested random effects (net within a site since nets were reused across sites)
 
-## Negative binomial GAMM
-Consider adding random effect of site  and net
-<!-- # Generalised Additive Mixed Modelling -->
-<!-- m.gamm <- gamm(nflounder ∼ nflounder ~ net + year + long + area + s(chlorophyll) +  -->
-<!--                  tempstdev + s(sal) + depth + distshore_cube + area_cube + s(bod),  -->
-<!--                random = list(site = ∼ 1), data = df) -->
+m.glmm.random2 <- glmmTMB(
+    nflounder ~ year + lat + long + distshore + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + (1 | site/net), 
+    data = df, 
+    family = nbinom2()
+)
+summary(m.glmm.random2)
 
-<!-- https://r.qcbs.ca/workshop08/book-en/introduction-to-generalized-additive-mixed-models-gamms.html -->
-<!-- m.gamm <- gamm(nflounder ~ net + year + long + area + s(chlorophyll) + -->
-<!--                  tempstdev + s(sal) + depth + distshore_cube + area_cube + s(bod), -->
-<!--                random = list(site = ~ 1), data = df, family = "nb", method = "REML", select = TRUE) -->
+# year|site for a model with random variation in slopes through years across sites
+m.glmm.random3 <- glmmTMB(
+    nflounder ~ lat + long + distshore + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + (year | site) + (1|net), 
+    data = df, 
+    family = nbinom2()
+)
+summary(m.glmm.random3)
+```
 
+Lets compare fixed and random effect models.
 
+```{r}
+anova(m.glmm.fixed, m.glmm.random1, m.glmm.random2, m.glmm.random3)
+```
 
+We choose the model with lowest AIC which is `m.glmm.random2`, a model of nested random effects (net within a site).
 
-<!-- # model diagnostics -->
-<!-- # there are a few outliers, check -->
-<!-- # residuals vs fitted --> linearity assumptions -->
-<!-- # qqplot -> normality -->
-<!-- # scale-location --> homogeneity variance -->
-<!-- # residuals vs leverage --> influential points  -->
-<!-- png("m.glm.stp.33.png", width = 900, height = 900, res = 120) -->
-<!-- par(mfrow=c(2,2)) -->
-<!-- plot(m.glm.stp) -->
-<!-- dev.off() -->
+## Zero-inflated poisson GLMM
 
-<!-- m.glm.res = residuals(m.glm) -->
-<!-- We now plot the residual against the observed values of the variables -->
-<!-- plot(m.glm, m.glm.res) -->
-<!-- plot(m.glm, m.glm.res)+ -->
-<!--   ylab("residuals") + xlab("variable") -->
-<!-- <return> -->
+Now lets try a zero-inflated Poisson model with a single zero inflation parameter applying to all observations using ziformula~1.
+
+```{r}
+m.glmm.random.zero <- glmmTMB(
+    nflounder ~ year + lat + long + distshore + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + (1 | site/net), 
+    data = df, 
+    ziformula=~1,
+    family = poisson()
+)
+summary(m.glmm.random.zero)
+```
+This model has higher AIC, hence we prefer binomial models.
+
+## Negative binomial GLMM (Hurdle Model).
+
+In contrast to zero-inflated models, hurdle models treat zero-count and nonzero outcomes as two completely separate categories, rather than treating the zero-count outcomes as a mixture of structural and sampling zeros.
+
+```{r}
+m.glmm.random2.hurdle <- update (m.glmm.random2,
+                                 data=df,
+                                 ziformula=~.,
+                                 family=truncated_nbinom2())
+summary(m.glmm.random2.hurdle)
+```
+Lets compare the models.
+```{r}
+anova(m.glmm.random2, m.glmm.random2.hurdle)
+```
+
+Model `m.glmm.random2.hurdle` is significantly better. From now on we continue with the negative binomial GLMM Hurdle model.
+This model assumes the following:
+
+\begin{itemize}
+    \item Count data: The response variable \(Y\) represents counts of events or occurrences.
+    \item Conditional distribution: The counts are assumed to follow a Negative Binomial distribution.
+    \item Random effects: The model incorporates random effects to account for unobserved heterogeneity among groups or individuals.
+    \item Excess zeros: The excess zeros in the data are modeled separately from the counts using a hurdle model approach.
+\end{itemize}
+
+### Parameterization
+
+Let \(Y_{ij}\) denote the count response variable for the \(i\)-th observation in the \(j\)-th group or individual. The model is parameterised as follows:
+
+\begin{enumerate}
+    \item \textbf{Count Model}:
+    \[
+    Y_{ij} \sim \text{NegBin}(\lambda_{ij}, \theta)
+    \]
+    where \(\lambda_{ij}\) is the mean of the Negative Binomial distribution and \(\theta\) is the dispersion parameter.
+    
+    \item \textbf{Zero-Inflation Model}:
+    \[
+    Z_{ij} \sim \text{Bernoulli}(\pi_{ij})
+    \]
+    where \(Z_{ij}\) represents a binary indicator for excess zeros and \(\pi_{ij}\) is the probability of observing excess zeros.
+\end{enumerate}
+
+### Link Function
+
+The relationship between the mean count \(\lambda_{ij}\) and the predictors \(X_{ij}\) is modeled using a log link function:
+
+\[
+\log(\lambda_{ij}) = X_{ij}\beta + u_j
+\]
+
+where \(X_{ij}\) is a vector of fixed effect predictors, \(\beta\) is a vector of fixed effect coefficients, and \(u_j\) represents the random effect for the \(j\)-th group or individual.
+
+### Interpretation
+
+The Negative Binomial GLMM estimates the effects of the predictors on both the count of events and the presence of excess zeros. The fixed effect coefficients (\(\beta\)) quantify the impact of the predictors on the mean count (\(\lambda_{ij}\)), while the random effects (\(u_j\)) capture the variability among groups or individuals.
+
+## Post-model-fitting procedure. 
+### Residuals
+```{r}
+plot(simulateResiduals(m.glmm.random2.hurdle))
+```
+### Estimated marginal means
