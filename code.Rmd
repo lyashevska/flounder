@@ -9,7 +9,7 @@ output:
 
 ```{r setup}
 # load packages 
-packages <- c("ggplot2", "MASS", "rmarkdown", "tinytex", "reshape2", "glmmTMB", "DHARMa")
+packages <- c("ggplot2", "MASS", "rmarkdown", "tinytex", "reshape2", "glmmTMB", "DHARMa", "emmeans")
 lapply(packages, library, character.only = TRUE)
 knitr::opts_chunk$set(fig.path = "figure/", dev = "png")
 set.seed(123)
@@ -249,7 +249,7 @@ summary(m.glmm.random.zero)
 ```
 This model has higher AIC, hence we prefer binomial models.
 
-## Negative binomial GLMM (Hurdle Model).
+## Truncated Negative Binomial GLMM (Hurdle Model).
 
 In contrast to zero-inflated models, hurdle models treat zero-count and nonzero outcomes as two completely separate categories, rather than treating the zero-count outcomes as a mixture of structural and sampling zeros.
 
@@ -312,4 +312,71 @@ The Negative Binomial GLMM estimates the effects of the predictors on both the c
 ```{r}
 plot(simulateResiduals(m.glmm.random2.hurdle))
 ```
+
 ### Estimated marginal means
+
+Lets consider marginal means between net types.
+
+```{r}
+m.glmm.random2.hurdle.net <- glmmTMB(
+    nflounder ~ year + lat + long + distshore + area + chlorophyll + tempavg + tempstdev + sal + bod + nh3 + po4 + depth + net + (1 | site/net), 
+    data = df, 
+    ziformula=~.,
+    family=truncated_nbinom2()
+)
+summary(m.glmm.random2.hurdle.net)
+
+emmeans(m.glmm.random2.hurdle.net,"net")
+```
+
+### Variable selection with drop1
+
+Refit the model with various terms dropped.
+
+```{r}
+system.time(m.glmm.random2.hurdle.d1 <- drop1(m.glmm.random2.hurdle,test="Chisq"))
+print(m.glmm.random2.hurdle.d1)
+```
+Lets remove some of the variables (bod, nh3, po4).
+
+```{r}
+final <- glmmTMB(nflounder ~ year + lat + long + distshore + chlorophyll + tempavg + tempstdev + sal + depth + (1 | site/net), 
+    data = df, 
+    ziformula=~.,
+    family=truncated_nbinom2())
+summary(final)
+```
+
+## Conclusion
+
+The response variable nflounder is modeled using a truncated negative binomial distribution with a log link function (Hurdle). 
+
+Truncated Negative Binomial model is a two part model, where the zero-inflation model estimates the presence/absence; the conditional model estimates the abundance. 
+
+The predictors in the both parts of the model include year, lat, long, distshore, chlorophyll, tempavg, tempstdev, sal, and depth, along with a random intercept for site/net. 
+
+### Random effect
+#### Conditional Model:
+- net:site Group (Intercept): The variability in the response variable nflounder due to the grouping of nets within sites is relatively low, with a variance of 0.08427 and a standard deviation of 0.2903.
+- site Group (Intercept): The variability in nflounder due to different sites is higher compared to the net:site grouping, with a variance of 0.70174 and a standard deviation of 0.8377.
+
+#### Zero-Inflation Model:
+net:site Group (Intercept): The variability in the zero-inflation component attributable to the grouping of nets within sites is moderate, with a variance of 0.1120 and a standard deviation of 0.3347.
+site Group (Intercept): The variability in zero-inflation due to different sites is relatively higher, with a variance of 0.4647 and a standard deviation of 0.6817.
+
+### Fixed Effects
+
+#### Conditional Model:
+The predictor year is statistically significant (p < 0.001), with a negative coefficient indicating a decrease in nflounder over time.
+distshore and salinity also show significance (p < 0.001 and p < 0.05, respectively), with negative coefficients implying a negative association with nflounder.
+Other predictors such as latitude, longitude, chlorophyll, average temperature, temperature standard deviation, and depth do not show statistically significant associations with nflounder.
+#### Zero-Inflation Model:
+Similar to the conditional model, year, latitude, longitude, distshore, and salinity are statistically significant predictors (p < 0.001 or p < 0.05).
+temperature standard deviation also shows significance (p < 0.05), but with a negative coefficient, indicating a negative association with the zero-inflation component.
+
+Including random effects for site and net reduces AIC and improves model fit, indicating that accounting for site-specific and net-specific variability is important. Nested random effects (site/net) further improve the model fit slightly compared to separate random effects. The models indicate that both spatial (longitude, distance to shore) and environmental (temperature, salinity, depth) variables significantly influence flounder counts. Random effects for site and net are crucial for capturing variability in the data, suggesting that there are site-specific and gear-specific influences on flounder counts. The year variable shows a strong temporal trend, which could indicate changes in flounder population over time.
+
+## References
+
+Brooks ME, Kristensen K, van Benthem KJ, Magnusson A, Berg CW, Nielsen A, Skaug HJ, Maechler M, Bolker BM (2017). “glmmTMB Balances Speed and Flexibility Among Packages for Zero-inflated Generalized Linear Mixed Modeling.” The R Journal, 9(2), 378–400. doi:10.32614/RJ-2017-066.
+- 
