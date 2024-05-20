@@ -15,6 +15,12 @@ knitr::opts_chunk$set(fig.path = "figure/", dev = "png")
 set.seed(123)
 ```
 
+```{r}
+# R version
+R.version$version.string
+# glmmTMB version
+packageVersion("glmmTMB")
+```
 # Data preparation and exploration
 
 ```{r}
@@ -356,6 +362,7 @@ Truncated Negative Binomial model is a two part model, where the zero-inflation 
 The predictors in the both parts of the model include year, lat, long, distshore, chlorophyll, tempavg, tempstdev, sal, and depth, along with a random intercept for site/net. 
 
 ### Random effect
+
 #### Conditional Model:
 - net:site Group (Intercept): The variability in the response variable nflounder due to the grouping of nets within sites is relatively low, with a variance of 0.08427 and a standard deviation of 0.2903.
 - site Group (Intercept): The variability in nflounder due to different sites is higher compared to the net:site grouping, with a variance of 0.70174 and a standard deviation of 0.8377.
@@ -370,13 +377,14 @@ site Group (Intercept): The variability in zero-inflation due to different sites
 The predictor year is statistically significant (p < 0.001), with a negative coefficient indicating a decrease in nflounder over time.
 distshore and salinity also show significance (p < 0.001 and p < 0.05, respectively), with negative coefficients implying a negative association with nflounder.
 Other predictors such as latitude, longitude, chlorophyll, average temperature, temperature standard deviation, and depth do not show statistically significant associations with nflounder.
+
 #### Zero-Inflation Model:
 Similar to the conditional model, year, latitude, longitude, distshore, and salinity are statistically significant predictors (p < 0.001 or p < 0.05).
 temperature standard deviation also shows significance (p < 0.05), but with a negative coefficient, indicating a negative association with the zero-inflation component.
 
-Including random effects for site and net reduces AIC and improves model fit, indicating that accounting for site-specific and net-specific variability is important. Nested random effects (site/net) further improve the model fit slightly compared to separate random effects. The models indicate that both spatial (longitude, distance to shore) and environmental (temperature, salinity, depth) variables significantly influence flounder counts. Random effects for site and net are crucial for capturing variability in the data, suggesting that there are site-specific and gear-specific influences on flounder counts. The year variable shows a strong temporal trend, which could indicate changes in flounder population over time.
+Overal, including random effects for site and net reduces AIC and improves model fit, indicating that accounting for site-specific and net-specific variability is important. Nested random effects (site/net) further improve the model fit slightly compared to separate random effects. The models indicate that both spatial (longitude, distance to shore) and environmental (temperature, salinity, depth) variables significantly influence flounder counts. Random effects for site and net are crucial for capturing variability in the data, suggesting that there are site-specific and gear-specific influences on flounder counts. The year variable shows a strong temporal trend, which could indicate changes in flounder population over time.
 
 ## References
 
 Brooks ME, Kristensen K, van Benthem KJ, Magnusson A, Berg CW, Nielsen A, Skaug HJ, Maechler M, Bolker BM (2017). “glmmTMB Balances Speed and Flexibility Among Packages for Zero-inflated Generalized Linear Mixed Modeling.” The R Journal, 9(2), 378–400. doi:10.32614/RJ-2017-066.
-- 
+ 
