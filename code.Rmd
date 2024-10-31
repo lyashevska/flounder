@@ -1,10 +1,15 @@
 ---
-title: "Statistical analysis of the effect of environmental variables on abundance of flounder"
+title: Statistical analysis of the effect of environmental variables on abundance
+  of flounder
 author: "Olga Lyashevska"
 date: "`r Sys.Date()`"
 output:
+  html_document:
+    toc: true
+    df_print: paged
   pdf_document:
     toc: true
+fig_caption: true  # Enable figure captions
 ---
 
 ```{r setup}
@@ -32,8 +37,28 @@ dim(df)
 df[c("net", "site")]<-lapply(df[c("net", "site")], factor)
 summary(df)
 ```
+```{r}
+# Calculate mean and standard deviation for numeric columns
+mean_values <- sapply(df[, sapply(df, is.numeric)], mean)
+std_values <- sapply(df[, sapply(df, is.numeric)], sd)
+
+# Combine results into a data frame
+summary_stats <- data.frame(
+  Mean = mean_values,
+  Standard_Deviation = std_values
+)
+
+# Print the summary statistics
+print(summary_stats)
+```
 
 ## Distribution of nflounder
+```{r}
+num_zeros <- sum(df$nflounder == 0)
+total_entries <- length(df$nflounder)
+percentage_zeros <- (num_zeros / total_entries) * 100
+percentage_zeros
+```
 
 ```{r}
 ggplot(df, aes(nflounder)) + 
@@ -71,9 +96,19 @@ conditional_mean <- mean(df$nflounder, na.rm=TRUE)
 We removed `r removed_nrow` from `r original_nrow`. Let's visualise distribution of nflounder again.
 
 ```{r}
-ggplot(df, aes(nflounder)) + 
-  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
-  labs(title = "Histogram of nflounder", x = "nflounder")
+# Load necessary libraries
+library(ggplot2)
+
+# Create the histogram
+ggplot(df, aes(x = nflounder)) + 
+  geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) +
+  labs(
+    x = "Number of flounder (nflounder)",
+    y = "Frequency"
+  ) +
+  theme_minimal() +  # Use a minimal theme for a clean look
+  scale_x_continuous(breaks = seq(0, max(df$nflounder, na.rm = TRUE), by = 10)) +  # Customize x-axis breaks
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)))  # Add space at the top of the y-axis
 ```
 As we can see data is still highly overdispersed, the conditional variance (`r conditional_var`) exceeds the conditional mean (`r conditional_mean`). In situations like this negative binomial is an appropriate distribution to use. 
 
