@@ -12,14 +12,23 @@ Istall any required packages using the following command:
 ```bash
 docker exec <container-id> R -e "install.packages('<package-name>')"
 ```
-Where `<package-name>` is the name of the package you want to install and `<container-id>` is the id of the container. The container id can be found by running `docker ps`.
+<container-id> can be found using `docker ps` as shown below.
 
 For example to install packages "ggplot2", "MASS", "mgcv", "rmarkdown", "tinytex" I would run the following commands:
 
 ```bash
-docker exec $(docker ps -q) R -e 'install.packages(c("ggplot2", "MASS", "rmarkdown", "tinytex", "reshape2", "glmmTMB", "DHARMa", "emmeans"))'
+docker exec $(docker ps | grep "rocker/rstudio" | awk '{print $1}') R -e 'install.packages(c("ggplot2", "MASS", "rmarkdown", "tinytex", "reshape2", "glmmTMB", "DHARMa", "emmeans"))'
 ```
-Where `docker ps -q` is the container id.
+
+### Explanation of the Command
+
+- **`docker exec`**: This command allows you to run commands in a running container.
+- **`$(docker ps | grep "rocker/rstudio" | awk '{print $1}')`**: This part dynamically retrieves the container ID of the running `rocker/rstudio` container. 
+  - `docker ps`: Lists all running containers.
+  - `grep "rocker/rstudio"`: Filters the list to find the specific container.
+  - `awk '{print $1}'`: Extracts the first column, which is the container ID.
+- **`R -e 'install.packages(...)'`**: This runs the R command to install the specified packages.
+
 
 RStudio can be accessed at `http://localhost:8787`
 User name is `rstudio` and password is `pass`
